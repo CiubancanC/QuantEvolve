@@ -1,0 +1,112 @@
+# QuantEvolve Configuration File
+
+# Evolution Parameters
+evolution:
+  num_islands: 8  # Number of independent populations (C + 1, where C is number of strategy categories)
+  num_generations: 150
+  migration_interval: 10  # Generations between island migrations
+  insight_curation_interval: 50  # Generations between insight consolidation
+  alpha: 0.5  # Exploitation-exploration balance [0,1]
+
+# Feature Map Configuration
+feature_map:
+  dimensions:
+    - name: "strategy_category"
+      type: "binary"  # Binary encoding for strategy categories
+      bins: 8  # Number of bits (2^8 = 256 possible combinations)
+    - name: "sharpe_ratio"
+      type: "continuous"
+      bins: 16
+      range: [-2.0, 5.0]
+    - name: "sortino_ratio"
+      type: "continuous"
+      bins: 16
+      range: [-2.0, 5.0]
+    - name: "total_return"
+      type: "continuous"
+      bins: 16
+      range: [-100, 500]  # percentage
+    - name: "max_drawdown"
+      type: "continuous"
+      bins: 16
+      range: [-100, 0]  # percentage
+    - name: "trading_frequency"
+      type: "continuous"
+      bins: 16
+      range: [0, 1000]  # trades per period
+
+# Strategy Categories for Initialization
+strategy_categories:
+  - "Momentum/Trend"
+  - "Mean-Reversion"
+  - "Volatility"
+  - "Volume/Liquidity"
+  - "Breakout/Pattern"
+  - "Correlation/Pairs"
+  - "Risk/Allocation"
+  - "Seasonal/Calendar Effects"
+
+# Sampling Parameters
+sampling:
+  num_best_cousins: 2
+  num_diverse_cousins: 3
+  num_random_cousins: 2
+  diverse_cousin_sigma: 1.0  # For continuous dimensions
+  bitflip_rate: 0.25  # k_bf = n * bitflip_rate for strategy category
+
+# LLM Configuration
+llm:
+  small_model: "qwen/qwen3-30b-a3b-instruct-2507"  # Fast, lightweight (Qwen3-30B-A3B-Instruct-2507)
+  large_model: "qwen/qwen3-next-80b-a3b-instruct"  # Thoughtful analysis (Qwen3-Next-80B-A3B-Instruct)
+  temperature: 0.7
+  max_tokens: 4000
+  timeout: 120  # seconds
+
+# Backtesting Configuration
+backtesting:
+  # Data configuration
+  assets:
+    equities: ["AAPL", "NVDA", "AMZN", "GOOGL", "MSFT", "TSLA"]
+    futures: ["ES", "NQ"]
+
+  # Time periods
+  periods:
+    equities:
+      train_start: "2015-08-01"
+      train_end: "2020-07-31"
+      val_start: "2020-08-01"
+      val_end: "2022-07-31"
+      test_start: "2022-08-01"
+      test_end: "2025-07-31"
+    futures:
+      train_start: "2018-01-01"
+      train_end: "2021-07-31"
+      val_start: "2021-08-01"
+      val_end: "2022-07-31"
+      test_start: "2022-08-01"
+      test_end: "2024-01-01"
+
+  # Transaction costs
+  commission: 0.0075  # per share
+  min_commission: 1.0  # minimum per trade
+  slippage_model: "volume_share"  # quadratic function of volume %
+
+  # Initial capital
+  initial_capital: 100000
+
+# Performance Metrics
+metrics:
+  risk_free_rate: 0.0
+  benchmark: "market_cap_weighted"  # For IR calculation
+  combined_score_weights:
+    sharpe_ratio: 1.0
+    information_ratio: 1.0
+    max_drawdown: 1.0  # Note: MDD is negative, so this adds the penalty
+
+# Logging
+logging:
+  level: "INFO"
+  save_strategies: true
+  save_insights: true
+  save_feature_maps: true
+  checkpoint_interval: 10  # Save checkpoint every N generations

@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/Users/employee/QuantEvolve/run_mini_test.py", line 14, in <module>
+    from agents.data_agent import DataAgent
+  File "/Users/employee/QuantEvolve/src/agents/data_agent.py", line 10, in <module>
+    from ..utils.llm_client import LLMEnsemble
+ImportError: attempted relative import beyond top-level package
