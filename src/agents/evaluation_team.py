@@ -181,8 +181,9 @@ class EvaluationTeam:
         if cat_match:
             try:
                 analysis['category_bin'] = int(cat_match.group(1))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.warning(f"Failed to parse category bin from LLM response: {cat_match.group(1)}")
+                logger.debug(f"ValueError: {e}")
 
         # Extract quality ratings
         if 'excellent' in response.lower():

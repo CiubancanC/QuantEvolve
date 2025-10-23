@@ -18,6 +18,7 @@ from .agents.research_agent import ResearchAgent
 from .agents.coding_team import CodingTeam
 from .agents.evaluation_team import EvaluationTeam
 from .backtesting.simple_backtest import SimpleBacktestEngine
+from .backtesting.improved_backtest import ImprovedBacktestEngine
 from .utils.data_prep import verify_data, create_sample_data
 
 
@@ -52,14 +53,27 @@ class QuantEvolve:
         llm_client = create_llm_client(llm_config)
         self.llm_ensemble = LLMEnsemble(llm_client)
 
-        # Initialize backtesting engine
-        self.logger.info("Initializing backtesting engine...")
+        # Initialize backtesting engine (using improved engine)
+        self.logger.info("Initializing improved backtesting engine...")
         data_dir = config.get('data_path', './data/raw')
-        self.backtest_engine = SimpleBacktestEngine(
+
+        # Get period definitions from config (assume equities for now)
+        periods = config.get('backtesting.periods.equities', {})
+
+        self.backtest_engine = ImprovedBacktestEngine(
             data_dir=data_dir,
             initial_capital=config.get('backtesting.initial_capital', 100000),
-            commission=config.get('backtesting.commission', 0.0075)
+            commission_pct=config.get('backtesting.commission', 0.001),  # 0.1%
+            slippage_pct=0.0005,  # 0.05%
+            risk_free_rate=0.02,  # 2%
+            train_start=periods.get('train_start'),
+            train_end=periods.get('train_end'),
+            val_start=periods.get('val_start'),
+            val_end=periods.get('val_end'),
+            test_start=periods.get('test_start'),
+            test_end=periods.get('test_end')
         )
+        self.logger.info(f"Backtesting on {len(self.backtest_engine.symbols)} symbols")
 
         # Initialize agents
         self.logger.info("Initializing agents...")

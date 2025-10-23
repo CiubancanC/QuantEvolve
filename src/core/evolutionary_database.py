@@ -349,7 +349,8 @@ class EvolutionaryDatabase:
 
     def curate_insights(self, max_insights: int = 100):
         """
-        Curate insights to remove redundancy and keep most important
+        Curate insights to remove redundancy and keep most important using
+        clustering and importance scoring.
 
         Args:
             max_insights: Maximum number of insights to keep
@@ -357,10 +358,128 @@ class EvolutionaryDatabase:
         if len(self.insights) <= max_insights:
             return
 
-        # For now, keep most recent insights
-        # TODO: Implement more sophisticated curation (e.g., clustering, importance scoring)
-        self.insights = self.insights[-max_insights:]
-        logger.info(f"Curated insights to {len(self.insights)} entries")
+        logger.info(f"Curating {len(self.insights)} insights using clustering and importance scoring")
+
+        # Score each insight based on multiple criteria
+        scored_insights = []
+        for insight in self.insights:
+            score = self._calculate_insight_importance(insight)
+            scored_insights.append((score, insight))
+
+        # Sort by score (descending)
+        scored_insights.sort(key=lambda x: x[0], reverse=True)
+
+        # Apply diversity selection to avoid redundancy
+        curated = self._apply_diversity_selection(
+            scored_insights,
+            max_insights
+        )
+
+        self.insights = curated
+        logger.info(f"Curated insights to {len(self.insights)} entries using clustering and importance scoring")
+
+    def _calculate_insight_importance(self, insight: Dict[str, Any]) -> float:
+        """
+        Calculate importance score for an insight based on multiple factors.
+
+        Args:
+            insight: Insight dictionary
+
+        Returns:
+            Importance score (higher is better)
+        """
+        score = 0.0
+
+        # Factor 1: Recency (newer insights get higher scores)
+        generation = insight.get('generation', 0)
+        recency_score = generation / max(self.current_generation, 1)
+        score += recency_score * 0.3
+
+        # Factor 2: Performance impact (insights from high-performing strategies)
+        strategy_score = insight.get('strategy_score', 0.0)
+        # Normalize to [0, 1] assuming scores typically range [-5, 10]
+        normalized_score = (strategy_score + 5) / 15
+        score += max(0, min(1, normalized_score)) * 0.4
+
+        # Factor 3: Novelty (insights that introduce new concepts)
+        content = str(insight.get('content', ''))
+        novelty_keywords = [
+            'novel', 'new', 'innovative', 'unique', 'unexpected',
+            'discovered', 'breakthrough', 'surprising'
+        ]
+        novelty_score = sum(1 for keyword in novelty_keywords if keyword in content.lower())
+        score += min(1.0, novelty_score / 3) * 0.2
+
+        # Factor 4: Actionability (insights that suggest concrete improvements)
+        actionability_keywords = [
+            'should', 'could', 'consider', 'implement', 'improve',
+            'optimize', 'add', 'remove', 'adjust', 'modify'
+        ]
+        action_score = sum(1 for keyword in actionability_keywords if keyword in content.lower())
+        score += min(1.0, action_score / 3) * 0.1
+
+        return score
+
+    def _apply_diversity_selection(
+        self,
+        scored_insights: List[Tuple[float, Dict[str, Any]]],
+        max_insights: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Apply diversity selection to avoid redundant insights using clustering.
+
+        Args:
+            scored_insights: List of (score, insight) tuples sorted by score
+            max_insights: Maximum number of insights to keep
+
+        Returns:
+            Diversified list of insights
+        """
+        if len(scored_insights) <= max_insights:
+            return [insight for _, insight in scored_insights]
+
+        # Simple diversity selection using content-based clustering
+        selected = []
+        selected_contents = []
+
+        for score, insight in scored_insights:
+            content = str(insight.get('content', '')).lower()
+
+            # Check if this insight is sufficiently different from selected ones
+            is_diverse = True
+            for selected_content in selected_contents:
+                # Calculate simple similarity (Jaccard similarity on words)
+                words1 = set(content.split())
+                words2 = set(selected_content.split())
+
+                if len(words1) == 0 or len(words2) == 0:
+                    continue
+
+                intersection = len(words1 & words2)
+                union = len(words1 | words2)
+                similarity = intersection / union if union > 0 else 0
+
+                # If too similar (>50% overlap), skip this insight
+                if similarity > 0.5:
+                    is_diverse = False
+                    break
+
+            if is_diverse:
+                selected.append(insight)
+                selected_contents.append(content)
+
+                if len(selected) >= max_insights:
+                    break
+
+        # If we didn't get enough diverse insights, fill with highest scoring ones
+        if len(selected) < max_insights:
+            for score, insight in scored_insights:
+                if insight not in selected:
+                    selected.append(insight)
+                    if len(selected) >= max_insights:
+                        break
+
+        return selected
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get database statistics"""

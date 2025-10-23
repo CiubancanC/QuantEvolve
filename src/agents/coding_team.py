@@ -8,6 +8,7 @@ from loguru import logger
 
 from ..utils.llm_client import LLMEnsemble
 from ..core.feature_map import Strategy
+from ..backtesting.improved_backtest import ImprovedBacktestEngine
 from .prompts import (
     CODING_TEAM_SYSTEM_PROMPT,
     CODING_TEAM_IMPLEMENTATION_PROMPT,
@@ -76,13 +77,14 @@ class CodingTeam:
                         notes = f"Debugged {iteration + 1} time(s)"
                     else:
                         notes = f"Failed after {self.max_iterations} attempts: {str(e)}"
-                        # Return placeholder metrics
-                        metrics = self._get_placeholder_metrics()
+                        # Return failure metrics indicating poor performance
+                        metrics = self._get_failure_metrics()
+                        logger.error(f"Strategy implementation failed after {self.max_iterations} attempts: {e}")
         else:
-            # No backtesting engine - return placeholder metrics
-            logger.warning("No backtesting engine available, using placeholder metrics")
-            metrics = self._get_placeholder_metrics()
-            notes = "No backtesting performed (placeholder metrics)"
+            # No backtesting engine available
+            logger.error("No backtesting engine available - cannot evaluate strategy")
+            metrics = self._get_failure_metrics()
+            notes = "No backtesting performed - engine unavailable"
 
         return code, metrics, notes
 
@@ -169,17 +171,20 @@ class CodingTeam:
         logger.warning("Could not extract code block, returning full response")
         return response.strip()
 
-    def _get_placeholder_metrics(self) -> Dict[str, float]:
-        """Get placeholder metrics when backtesting is not available"""
-        import numpy as np
-
-        # Generate random but realistic metrics
+    def _get_failure_metrics(self) -> Dict[str, float]:
+        """
+        Get failure metrics when strategy implementation or backtesting fails.
+        Returns poor performance metrics to ensure failed strategies are naturally
+        rejected by the evolutionary process.
+        """
         return {
-            'sharpe_ratio': np.random.uniform(0.0, 2.0),
-            'sortino_ratio': np.random.uniform(0.0, 2.5),
-            'information_ratio': np.random.uniform(-0.5, 1.5),
-            'total_return': np.random.uniform(-50, 300),
-            'max_drawdown': -np.random.uniform(10, 50),
-            'trading_frequency': np.random.randint(10, 500),
+            'sharpe_ratio': -1.0,  # Poor risk-adjusted return
+            'sortino_ratio': -1.0,  # Poor downside risk-adjusted return
+            'information_ratio': -1.0,  # Poor excess return
+            'total_return': -50.0,  # Significant loss
+            'max_drawdown': -75.0,  # Severe drawdown
+            'trading_frequency': 0,  # No valid trades
+            'win_rate': 0.0,
+            'profit_factor': 0.0,
             'strategy_category_bin': 1  # Will be updated by evaluation team
         }

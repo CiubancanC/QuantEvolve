@@ -42,19 +42,56 @@ DATA_AGENT_CATEGORY_PROMPT = """Based on the data schema, generate a simple base
 Requirements:
 1. The strategy should be representative of this category
 2. It should use only the features available in the data schema
-3. It must be implementable with the Zipline backtesting framework
-4. Keep it simple but functional - this is a seed strategy
+3. Keep it simple but functional - this is a seed strategy
+4. **IMPORTANT**: Do NOT import zipline or any external backtesting frameworks
+5. Only use pandas (pd) and numpy (np) - these are already available
 
 Provide:
 1. Hypothesis: Brief description of the strategy logic
-2. Python Code: Complete Zipline-compatible strategy implementation
+2. Python Code: Implement a `generate_signals(data)` function
 3. Expected characteristics: Expected behavior (e.g., high frequency, momentum-based, etc.)
 
-The code should follow this structure:
-- Use Zipline API (initialize, handle_data, etc.)
-- Handle missing data gracefully
-- Include proper position sizing
-- Implement entry and exit logic clearly"""
+## Function Signature
+The code MUST include this function:
+```python
+def generate_signals(data):
+    '''
+    Generate trading signals from OHLCV data
+
+    Args:
+        data: DataFrame with columns ['open', 'high', 'low', 'close', 'volume']
+              Index is datetime
+
+    Returns:
+        Series of signals: 1 (long), 0 (neutral), -1 (short)
+        Index should match data index
+    '''
+    import pandas as pd
+    import numpy as np
+
+    signals = pd.Series(0, index=data.index)
+
+    # Your strategy logic here
+    # Example: signals[some_condition] = 1  # Long
+    # Example: signals[other_condition] = -1  # Short
+
+    return signals
+```
+
+## Available Libraries
+- `pd` (pandas): Data manipulation
+- `np` (numpy): Numerical operations
+- Standard Python built-ins
+
+## What NOT to do
+- ❌ Do NOT import zipline, backtrader, or other frameworks
+- ❌ Do NOT import external libraries (sklearn, ta-lib, etc.)
+- ❌ Do NOT use context or portfolio objects
+
+The code should:
+- Handle missing data gracefully with .fillna() or .dropna()
+- Include proper signal logic for entry and exit
+- Return a Series with same index as input data"""
 
 
 RESEARCH_AGENT_SYSTEM_PROMPT = """You are a Research Agent in a quantitative trading research team.
@@ -152,14 +189,52 @@ CODING_TEAM_IMPLEMENTATION_PROMPT = """Implement the following trading strategy 
 {parent_code}
 
 ## Requirements
-1. Implement using Zipline framework
-2. Follow the data schema
-3. Handle edge cases (missing data, low volume, etc.)
-4. Include proper position sizing and risk management
-5. Add comments explaining key logic
+1. **IMPORTANT**: Do NOT import zipline or any external backtesting frameworks
+2. Only use pandas (pd) and numpy (np) - these are already available
+3. Implement a `generate_signals(data)` function that takes OHLCV DataFrame and returns signals
+4. Follow the data schema
+5. Handle edge cases (missing data, low volume, etc.)
+6. Include proper position sizing logic in the signals
+7. Add comments explaining key logic
+
+## Function Signature
+```python
+def generate_signals(data):
+    '''
+    Generate trading signals from OHLCV data
+
+    Args:
+        data: DataFrame with columns ['open', 'high', 'low', 'close', 'volume']
+              Index is datetime
+
+    Returns:
+        Series of signals: 1 (long), 0 (neutral), -1 (short)
+        Index should match data index
+    '''
+    # Your strategy logic here
+    signals = pd.Series(0, index=data.index)
+
+    # Example: Long when condition is True
+    signals[some_condition] = 1
+
+    # Example: Short when other condition is True
+    signals[other_condition] = -1
+
+    return signals
+```
+
+## Available Libraries
+- `pd` (pandas): Data manipulation
+- `np` (numpy): Numerical operations
+- Standard Python built-ins
+
+## What NOT to do
+- ❌ Do NOT import zipline, backtrader, or other frameworks
+- ❌ Do NOT import external libraries (sklearn, ta-lib, etc.)
+- ❌ Do NOT use context or portfolio objects (Zipline-specific)
 
 Provide:
-1. Complete Python code
+1. Complete Python code with generate_signals() function
 2. Brief implementation notes (any assumptions or design choices)
 
 The code should be production-ready and handle real-world data issues gracefully."""
@@ -183,12 +258,19 @@ Please debug and fix the code. Common issues include:
 - Data alignment problems
 - Division by zero
 - Look-ahead bias
-- Improper Zipline API usage
-- Missing data handling
+- Incorrect signal generation logic
+- Missing data handling (NaN values)
 - Position sizing errors
+- Index mismatches between data and signals
+
+**IMPORTANT REMINDERS**:
+- Do NOT import zipline or external libraries
+- Only use pandas (pd) and numpy (np)
+- Return a Series of signals (1, 0, -1) with same index as input data
+- Handle NaN/missing values with .fillna() or .dropna()
 
 Provide:
-1. Fixed code
+1. Fixed code with generate_signals() function
 2. Explanation of what was wrong and how you fixed it"""
 
 
