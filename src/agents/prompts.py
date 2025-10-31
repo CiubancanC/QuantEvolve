@@ -23,6 +23,10 @@ Your tasks:
    - Any preprocessing requirements
    - Backtesting constraints (lookback periods, data availability)
 
+**IMPORTANT** (Issue #6 fix): Only include features that are actually present in the data files.
+Do NOT suggest or list features like earnings calendars, fundamental data, or news sentiment
+unless they are explicitly present in the data columns.
+
 5. Identify strategy categories that can be derived from this data:
    - Momentum/Trend Following
    - Mean Reversion
@@ -89,7 +93,8 @@ def generate_signals(data):
 - ❌ Do NOT use context or portfolio objects
 
 The code should:
-- Handle missing data gracefully with .fillna() or .dropna()
+- Handle missing data gracefully with .fillna(value), .ffill(), .bfill(), or .dropna()
+- **IMPORTANT**: Do NOT use fillna(method='ffill') or fillna(method='bfill') - use .ffill() and .bfill() instead (pandas deprecation)
 - Include proper signal logic for entry and exit
 - Return a Series with same index as input data"""
 
@@ -141,11 +146,40 @@ Based on this information, generate a novel hypothesis that:
 2. Addresses limitations observed in previous strategies
 3. Explores new combinations or approaches suggested by the insights
 4. Is implementable with the available data
+5. **CRITICAL**: Generates sufficient trading signals (target: 15-30 trades per asset per year)
+
+## Trading Frequency Requirements
+
+**IMPORTANT**: Avoid over-filtering! A strategy with <10 trades/year per asset will be automatically rejected.
+
+Common over-filtering mistakes to avoid:
+- Stacking too many filters (e.g., breakout + volume spike + trend + RSI)
+- Using overly aggressive sigma thresholds (>1.2σ is often too strict)
+- Using slow trend indicators (50-day SMA may be too slow for tech stocks)
+- Requiring multiple rare conditions to align simultaneously
+
+Good practices:
+- Use 2-3 complementary filters maximum
+- Start with moderate thresholds (e.g., 0.8-1.0σ for volume)
+- Use faster trend indicators for momentum strategies (10-20 day)
+- Test each filter individually before combining them
+- **Target**: 15-30 trades per asset over a 3-year period (5-10 trades/year)
+
+## Unavailable Data Features (Issue #6 fix)
+
+**CRITICAL**: The following features are NOT available in the data schema and MUST NOT be used:
+- ❌ Earnings dates or earnings announcements
+- ❌ Earnings surprise data
+- ❌ Pre-earnings drift or post-earnings drift patterns
+- ❌ Earnings calendar events
+- ❌ Fundamental data (P/E ratios, EPS, revenue, etc.)
+
+**Only use**: OHLCV data (Open, High, Low, Close, Volume) and derived technical indicators.
 
 Provide your hypothesis in the following structure:
 1. Hypothesis Statement
 2. Rationale
-3. Objectives
+3. Objectives (must include expected trading frequency: "Target 15-30 trades per asset")
 4. Expected Insights
 5. Risks and Limitations
 6. Experimentation Ideas"""
@@ -232,12 +266,45 @@ def generate_signals(data):
 - ❌ Do NOT import zipline, backtrader, or other frameworks
 - ❌ Do NOT import external libraries (sklearn, ta-lib, etc.)
 - ❌ Do NOT use context or portfolio objects (Zipline-specific)
+- ❌ Do NOT use fillna(method='ffill') or fillna(method='bfill') - use .ffill() and .bfill() instead (pandas deprecation)
+- ❌ Do NOT stack too many filters that will eliminate all signals
+- ❌ Do NOT use overly aggressive thresholds (e.g., >1.5σ) that rarely trigger
+
+## Unavailable Data Features (Issue #6 fix)
+
+**CRITICAL**: The following features are NOT available and will cause errors:
+- ❌ Earnings dates, earnings announcements, earnings calendar
+- ❌ Earnings surprise, pre-earnings drift, post-earnings drift
+- ❌ Fundamental data (P/E ratios, EPS, revenue, book value, etc.)
+- ❌ Corporate actions data (splits, dividends beyond price adjustment)
+- ❌ News sentiment, analyst ratings, insider trading data
+
+**Only use**: OHLCV data (open, high, low, close, volume) and derived technical indicators (moving averages, RSI, volatility, momentum, etc.)
+
+## Examples of Good vs Bad Strategies
+
+**BAD EXAMPLE** (over-filtered, <5 trades/year):
+```python
+# Requires: price > 20d high AND volume > 1.5σ AND close > 50d SMA AND RSI > 60
+# Problem: All 4 conditions rarely align → generates 1-2 signals in 3 years
+```
+
+**GOOD EXAMPLE** (balanced filtering, 15-30 trades/year):
+```python
+# Requires: price > 10d high AND volume > 0.8σ
+# Uses faster indicators, moderate thresholds → generates signals regularly
+```
+
+**Target Trading Frequency**: 15-30 trades per asset over 3 years (5-10 trades/year)
+- If hypothesis requires multiple filters, use MODERATE thresholds
+- Prefer 10-20 day lookback periods for tech stocks (not 50-200 day)
+- Test: If only 1-2 conditions trigger per month, that's good. If 1-2 per year, it's too strict.
 
 Provide:
 1. Complete Python code with generate_signals() function
 2. Brief implementation notes (any assumptions or design choices)
 
-The code should be production-ready and handle real-world data issues gracefully."""
+The code should be production-ready, handle real-world data issues gracefully, and generate sufficient signals (target: 5-10 trades/year/asset)."""
 
 
 CODING_TEAM_DEBUG_PROMPT = """The strategy code encountered an issue during backtesting.
@@ -267,7 +334,8 @@ Please debug and fix the code. Common issues include:
 - Do NOT import zipline or external libraries
 - Only use pandas (pd) and numpy (np)
 - Return a Series of signals (1, 0, -1) with same index as input data
-- Handle NaN/missing values with .fillna() or .dropna()
+- Handle NaN/missing values with .fillna(value), .ffill(), .bfill(), or .dropna()
+- **CRITICAL**: Do NOT use fillna(method='ffill') or fillna(method='bfill') - use .ffill() and .bfill() instead (pandas deprecation)
 
 Provide:
 1. Fixed code with generate_signals() function

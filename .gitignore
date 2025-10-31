@@ -47,6 +47,18 @@ results/*
 .ipynb_checkpoints/
 *.ipynb
 
+# Temporary files
+*.log
+*.tmp
+*.bak
+
+# Claude Code
+.claude/settings.local.json
+
 # OS
 .DS_Store
 Thumbs.db
+
+# Pickled results (regenerated)
+results/**/*.pkl
+!results/.gitkeep

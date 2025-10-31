@@ -1,0 +1,86 @@
+================================================================================
+TOP 10 STRATEGIES FROM EVOLUTION
+================================================================================
+Generated: 2025-11-01 01:09:14
+Total Generations: 149
+
+
+1. Strategy strat_734877525
+   Generation: 145
+   Combined Score: 0.071
+   Sharpe Ratio: 2.648
+   Total Return: 185.81%
+   Max Drawdown: -2.12%
+
+
+2. Strategy strat_837027945
+   Generation: 0
+   Combined Score: 0.000
+   Sharpe Ratio: 0.000
+   Total Return: 0.00%
+   Max Drawdown: 0.00%
+
+
+3. Strategy strat_841436342
+   Generation: 0
+   Combined Score: 0.000
+   Sharpe Ratio: 0.000
+   Total Return: 0.00%
+   Max Drawdown: 0.00%
+
+
+4. Strategy strat_927437590
+   Generation: 0
+   Combined Score: 0.000
+   Sharpe Ratio: 0.000
+   Total Return: 0.00%
+   Max Drawdown: 0.00%
+
+
+5. Strategy strat_109118364
+   Generation: 0
+   Combined Score: 0.000
+   Sharpe Ratio: 0.000
+   Total Return: 0.00%
+   Max Drawdown: 0.00%
+
+
+6. Strategy strat_730524051
+   Generation: 68
+   Combined Score: -1.879
+   Sharpe Ratio: 3.682
+   Total Return: 556.59%
+   Max Drawdown: -5.77%
+
+
+7. Strategy strat_498562678
+   Generation: 82
+   Combined Score: -1.910
+   Sharpe Ratio: -0.013
+   Total Return: 10.29%
+   Max Drawdown: -0.70%
+
+
+8. Strategy strat_139041202
+   Generation: 121
+   Combined Score: -1.940
+   Sharpe Ratio: 0.216
+   Total Return: 13.06%
+   Max Drawdown: -0.98%
+
+
+9. Strategy strat_251811570
+   Generation: 113
+   Combined Score: -1.940
+   Sharpe Ratio: 0.346
+   Total Return: 15.72%
+   Max Drawdown: -1.12%
+
+
+10. Strategy strat_175698548
+   Generation: 144
+   Combined Score: -2.232
+   Sharpe Ratio: 3.459
+   Total Return: 433.41%
+   Max Drawdown: -5.73%
+

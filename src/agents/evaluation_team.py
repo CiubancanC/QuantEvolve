@@ -19,21 +19,41 @@ class EvaluationTeam:
     Evaluation Team for analyzing strategies and extracting insights
     """
 
-    def __init__(self, llm_ensemble: LLMEnsemble):
+    # Category-aware minimum trades per year (Issue #1 fix)
+    # Different strategy categories have different natural trading frequencies
+    # Based on paper Section 4.1 (Feature dimensions) and Section 7 (evolved strategies)
+    MIN_TRADES_PER_YEAR_BY_CATEGORY = {
+        'Momentum/Trend': 10,                   # Holds positions weeks-months
+        'Mean-Reversion': 15,                   # Faster cycle times
+        'Volatility': 12,                       # Volatility regime changes
+        'Volume/Liquidity': 15,                 # Needs sufficient activity
+        'Breakout/Pattern': 8,                  # Waits for pattern formation
+        'Correlation/Pairs': 6,                 # Waits for cointegration
+        'Risk/Allocation': 4,                   # Portfolio rebalancing (quarterly is valid)
+        'Seasonal/Calendar Effects': 12,        # Calendar-driven
+        'benchmark': 12,                        # Monthly rebalancing
+        'default': 10                           # Fallback for unrecognized categories
+    }
+
+    def __init__(self, llm_ensemble: LLMEnsemble, min_trades_per_year: int = 10):
         """
         Initialize Evaluation Team
 
         Args:
             llm_ensemble: LLM ensemble for analysis
+            min_trades_per_year: Default minimum trades per year (used if category not specified)
         """
         self.llm = llm_ensemble
+        self.min_trades_per_year = min_trades_per_year  # Default fallback
 
     def analyze_strategy(
         self,
         hypothesis: str,
         code: str,
         metrics: Dict[str, float],
-        quantstats_output: str = "N/A"
+        quantstats_output: str = "N/A",
+        backtest_years: float = 3.0,
+        strategy_category: str = None
     ) -> Dict:
         """
         Analyze strategy and extract insights
@@ -43,11 +63,58 @@ class EvaluationTeam:
             code: Strategy code
             metrics: Backtest metrics
             quantstats_output: QuantStats analysis output
+            backtest_years: Number of years in backtest period (for trade frequency check)
+            strategy_category: Strategy category for category-aware filtering (Issue #1 fix)
 
         Returns:
             Analysis dictionary with insights and categorization
         """
-        logger.info("Analyzing strategy")
+        logger.info(f"Analyzing strategy (category: {strategy_category or 'unknown'})")
+
+        # Get category-appropriate minimum trades threshold (Issue #1 fix)
+        if strategy_category and strategy_category in self.MIN_TRADES_PER_YEAR_BY_CATEGORY:
+            min_trades_threshold = self.MIN_TRADES_PER_YEAR_BY_CATEGORY[strategy_category]
+            logger.debug(f"Using category-specific threshold: {min_trades_threshold} trades/year for {strategy_category}")
+        else:
+            min_trades_threshold = self.MIN_TRADES_PER_YEAR_BY_CATEGORY['default']
+            logger.debug(f"Using default threshold: {min_trades_threshold} trades/year")
+
+        # Check for over-filtering (too few trades)
+        trading_frequency = metrics.get('trading_frequency', 0)
+        trades_per_year = trading_frequency / backtest_years if backtest_years > 0 else 0
+
+        if trades_per_year < min_trades_threshold:
+            logger.warning(
+                f"Strategy over-filtered: {trading_frequency} trades over {backtest_years:.1f} years "
+                f"({trades_per_year:.1f} trades/year < {min_trades_threshold} min for {strategy_category or 'unknown'} category)"
+            )
+            # Mark with special category bin to indicate rejection
+            return {
+                'full_text': (
+                    f"REJECTED: Strategy is over-filtered with only {trading_frequency} trades "
+                    f"over {backtest_years:.1f} years ({trades_per_year:.1f} trades/year). "
+                    f"Minimum required for {strategy_category or 'this'} category: {min_trades_threshold} trades/year.\n\n"
+                    "This strategy suffers from extreme filter stacking that eliminates nearly all signals. "
+                    "While high Sharpe/Sortino ratios with n=1 or n=2 trades appear attractive, they are "
+                    "statistically meaningless and indicate overfitting rather than genuine edge.\n\n"
+                    "Recommendation: Relax filters (reduce sigma thresholds, use faster trend indicators, "
+                    "or remove redundant conditions) to achieve 15-30 trades per asset per year."
+                ),
+                'hypothesis_quality': 'Rejected - Over-filtered',
+                'implementation_fidelity': 'N/A',
+                'insights': [
+                    f"Over-filtering: Only {trading_frequency} trades in {backtest_years:.1f} years",
+                    "High metrics with low trade count are statistically unreliable",
+                    "Need to relax filter conditions to generate sufficient signals"
+                ],
+                'recommendations': [
+                    f"Increase trade frequency to at least {min_trades_threshold} trades/year for {strategy_category or 'this'} category",
+                    "Reduce sigma thresholds for indicators",
+                    "Use faster trend filters (e.g., 20-day instead of 50-day)",
+                    "Remove redundant filter conditions"
+                ],
+                'category_bin': 9999  # Special bin for rejected strategies
+            }
 
         # Format metrics for display
         metrics_str = self._format_metrics(metrics)

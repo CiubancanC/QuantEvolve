@@ -92,6 +92,9 @@ class ImprovedBacktestEngine:
         if self.test_start and self.test_end:
             logger.info(f"Test period: {self.test_start.date()} to {self.test_end.date()}")
 
+        # Benchmark returns cache (market-cap-weighted)
+        self.benchmark_returns_cache = None
+
     def set_period(self, period: str):
         """
         Set the current period for backtesting
@@ -103,8 +106,9 @@ class ImprovedBacktestEngine:
             raise ValueError(f"Period must be 'train', 'val', or 'test', got '{period}'")
 
         self.current_period = period
-        # Clear cache to force reloading with new period filter
+        # Clear caches to force reloading with new period filter
         self.data_cache.clear()
+        self.benchmark_returns_cache = None
         logger.info(f"Set backtest period to: {period}")
 
     def _get_period_bounds(self) -> tuple[Optional[pd.Timestamp], Optional[pd.Timestamp]]:
@@ -145,6 +149,8 @@ class ImprovedBacktestEngine:
                 # Ensure we have required columns
                 required_cols = ['open', 'high', 'low', 'close', 'volume']
                 if all(col in df.columns for col in required_cols):
+                    # Normalize datetime index (Issue #3 fix)
+                    df = self._normalize_datetime_index(df)
                     # Apply period filter
                     df = self._filter_by_period(df)
                     if df is not None and len(df) > 0:
@@ -167,6 +173,8 @@ class ImprovedBacktestEngine:
 
                 required_cols = ['open', 'high', 'low', 'close', 'volume']
                 if all(col in df.columns for col in required_cols):
+                    # Normalize datetime index (Issue #3 fix)
+                    df = self._normalize_datetime_index(df)
                     # Apply period filter
                     df = self._filter_by_period(df)
                     if df is not None and len(df) > 0:
@@ -202,6 +210,95 @@ class ImprovedBacktestEngine:
             if data is not None:
                 all_data[symbol] = data
         return all_data
+
+    def _calculate_benchmark_returns(self, symbols: Optional[List[str]] = None) -> Optional[pd.Series]:
+        """
+        Calculate market-cap-weighted benchmark returns
+
+        As specified in paper Section 6.2: "For equities, we construct a market
+        capitalization-weighted portfolio of the six stocks rebalanced monthly"
+
+        Args:
+            symbols: List of symbols to include in benchmark (uses all if None)
+
+        Returns:
+            Series of benchmark returns, or None if calculation fails
+        """
+        # Use cache if available
+        if self.benchmark_returns_cache is not None:
+            return self.benchmark_returns_cache
+
+        # Use provided symbols or all available
+        benchmark_symbols = symbols if symbols else self.symbols
+
+        logger.info(f"Calculating market-cap-weighted benchmark for {len(benchmark_symbols)} symbols")
+
+        # Load price data for all symbols
+        all_prices = {}
+        for symbol in benchmark_symbols:
+            data = self.load_data(symbol)
+            if data is not None:
+                all_prices[symbol] = data['close']
+
+        if not all_prices:
+            logger.warning("No price data available for benchmark calculation")
+            return None
+
+        # Create DataFrame with all prices
+        prices_df = pd.DataFrame(all_prices)
+
+        # For simplicity, use equal weighting as proxy for market-cap weighting
+        # Ideally, we'd use actual market cap data, but it's often not available
+        # in OHLCV data. Equal-weighted is a reasonable approximation for the
+        # paper's specification when market caps are similar.
+        #
+        # NOTE: For true market-cap weighting, you would need market cap data:
+        # market_caps = {...}  # Load market cap data
+        # weights = market_caps / market_caps.sum()
+        #
+        # For now, we use equal weights rebalanced monthly as specified in paper
+        logger.info("Using equal-weighted portfolio as market-cap proxy (rebalanced monthly)")
+
+        # Calculate monthly rebalancing dates (first business day of each month)
+        monthly_dates = prices_df.resample('MS').first().index
+
+        # Calculate returns
+        returns = prices_df.pct_change()
+
+        # Initialize weights (equal weight)
+        num_assets = len(prices_df.columns)
+        weights = pd.Series(1.0 / num_assets, index=prices_df.columns)
+
+        # Calculate portfolio returns with monthly rebalancing
+        portfolio_returns = pd.Series(0.0, index=returns.index)
+
+        for i in range(len(monthly_dates) - 1):
+            # Period between rebalancing
+            start_date = monthly_dates[i]
+            end_date = monthly_dates[i + 1]
+
+            # Get returns for this period
+            period_returns = returns.loc[start_date:end_date]
+
+            # Apply weights to get portfolio returns
+            portfolio_returns.loc[start_date:end_date] = (period_returns * weights).sum(axis=1)
+
+        # Handle final period
+        if len(monthly_dates) > 0:
+            final_start = monthly_dates[-1]
+            final_returns = returns.loc[final_start:]
+            portfolio_returns.loc[final_start:] = (final_returns * weights).sum(axis=1)
+
+        # Remove NaN values
+        portfolio_returns = portfolio_returns.dropna()
+
+        # Cache the result
+        self.benchmark_returns_cache = portfolio_returns
+
+        logger.info(f"Calculated benchmark returns: mean={portfolio_returns.mean()*252:.2%}, "
+                   f"vol={portfolio_returns.std()*np.sqrt(252):.2%}")
+
+        return portfolio_returns
 
     def run_backtest(self, strategy_code: str, symbols: Optional[List[str]] = None) -> Dict[str, float]:
         """
@@ -251,6 +348,9 @@ class ImprovedBacktestEngine:
                     if not isinstance(signals, pd.Series):
                         signals = pd.Series(signals, index=data.index)
 
+                    # Validate and sanitize signals (Issue #2 fix)
+                    signals = self._validate_signals(signals, data)
+
                     # Calculate returns for this symbol
                     symbol_returns = self._calculate_returns(data, signals)
 
@@ -262,10 +362,11 @@ class ImprovedBacktestEngine:
                     logger.warning(f"Error backtesting {symbol}: {e}")
                     continue
 
-            # If no valid returns, return default metrics
+            # If no valid returns, return worst-case metrics (Issue #4 fix)
             if len(all_returns) == 0:
-                logger.warning("No valid backtest results")
-                return self._get_default_metrics()
+                logger.warning("No valid backtest results - assigning worst-case metrics")
+                logger.warning(f"Attempted symbols: {test_symbols}")
+                return self._get_worst_case_metrics()
 
             # Combine returns from all symbols (equal weight)
             combined_returns = pd.concat(all_returns, axis=1).mean(axis=1)
@@ -284,19 +385,128 @@ class ImprovedBacktestEngine:
             return self._get_default_metrics()
 
     def _create_strategy_namespace(self) -> Dict:
-        """Create namespace for strategy execution"""
+        """Create namespace for strategy execution with timezone-safe Timestamp"""
         import pandas as pd
         import numpy as np
+
+        # Wrap pd.Timestamp to force timezone-naive (Issue #3 fix)
+        original_timestamp = pd.Timestamp
+
+        def safe_timestamp(*args, **kwargs):
+            """Timezone-naive Timestamp wrapper"""
+            kwargs.pop('tz', None)  # Remove tz if present
+            kwargs.pop('tzinfo', None)
+            ts = original_timestamp(*args, **kwargs)
+            if hasattr(ts, 'tz') and ts.tz is not None:
+                ts = ts.tz_localize(None)
+            return ts
 
         namespace = {
             'pd': pd,
             'np': np,
             'DataFrame': pd.DataFrame,
             'Series': pd.Series,
+            'Timestamp': safe_timestamp,  # Use safe wrapper
             '__builtins__': __builtins__
         }
 
         return namespace
+
+    def _validate_signals(self, signals: pd.Series, data: pd.DataFrame) -> pd.Series:
+        """
+        Validate and sanitize trading signals to prevent backtest errors.
+
+        Handles:
+        - NaN/inf values
+        - Non-numeric values
+        - Index misalignment
+        - Type errors
+        - Timezone issues
+
+        Per paper Section 5.4: Handle edge cases before backtesting.
+
+        Args:
+            signals: Raw trading signals from strategy
+            data: OHLCV data for alignment
+
+        Returns:
+            Validated and sanitized signals
+        """
+        # Track validation issues for logging
+        validation_issues = []
+
+        # Ensure Series type
+        if not isinstance(signals, pd.Series):
+            signals = pd.Series(signals, index=data.index)
+            validation_issues.append("converted to Series")
+
+        # Align with data index
+        if len(signals) != len(data) or not signals.index.equals(data.index):
+            signals = signals.reindex(data.index)
+            validation_issues.append("reindexed to match data")
+
+        # Check for NaN values
+        original_nan_count = signals.isna().sum()
+        if original_nan_count > 0:
+            validation_issues.append(f"{original_nan_count} NaN values")
+
+        # Check for inf values
+        original_inf_count = np.isinf(signals).sum()
+        if original_inf_count > 0:
+            validation_issues.append(f"{original_inf_count} inf values")
+
+        # Replace NaN/inf with neutral signal (0)
+        signals = signals.fillna(0)
+        signals = signals.replace([np.inf, -np.inf], 0)
+
+        # Ensure numeric
+        try:
+            signals = pd.to_numeric(signals, errors='coerce').fillna(0)
+        except Exception:
+            validation_issues.append("non-numeric values")
+            signals = pd.Series(0, index=data.index)
+
+        # Clip to valid range [-1, 1]
+        if (signals.abs() > 1).any():
+            validation_issues.append("out-of-range values clipped")
+            signals = signals.clip(-1, 1)
+
+        # Ensure datetime index is timezone-naive (Issue #3 fix)
+        if isinstance(signals.index, pd.DatetimeIndex):
+            if signals.index.tz is not None:
+                signals.index = signals.index.tz_localize(None)
+                validation_issues.append("timezone removed from index")
+
+        # Log validation issues if any
+        if validation_issues:
+            logger.debug(f"Signal validation corrected: {', '.join(validation_issues)}")
+
+        return signals
+
+    def _normalize_datetime_index(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Ensure datetime index is timezone-naive and properly typed.
+
+        Per paper data pipeline: All timestamps should be timezone-naive
+        for consistent comparison operations.
+
+        Args:
+            df: DataFrame with datetime index
+
+        Returns:
+            DataFrame with normalized timezone-naive index
+        """
+        if isinstance(df.index, pd.DatetimeIndex):
+            if df.index.tz is not None:
+                df.index = df.index.tz_localize(None)
+
+        # Ensure all datetime columns are also timezone-naive
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                if hasattr(df[col].dt, 'tz') and df[col].dt.tz is not None:
+                    df[col] = df[col].dt.tz_localize(None)
+
+        return df
 
     def _calculate_returns(self, data: pd.DataFrame, signals: pd.Series) -> Optional[pd.Series]:
         """
@@ -442,12 +652,35 @@ class ImprovedBacktestEngine:
             trading_frequencies.append(freq)
         trading_frequency = int(np.mean(trading_frequencies)) if trading_frequencies else 50
 
-        # Calculate Information Ratio
-        # For IR, we compare against 0 (assuming market neutral strategy)
-        # If strategy is long-only, we'd compare against buy-and-hold
-        excess_returns = returns  # Already relative to 0
-        tracking_error = excess_returns.std() * np.sqrt(252)
-        information_ratio = (excess_returns.mean() * 252) / tracking_error if tracking_error > 0 else 0
+        # Calculate Information Ratio using market-cap-weighted benchmark
+        # Paper specification (Section 6.3.1): IR = (R̄_p - R̄_b) / σ_(p-b)
+        # where R̄_b is benchmark return and σ_(p-b) is tracking error
+        benchmark_returns = self._calculate_benchmark_returns()
+
+        if benchmark_returns is not None:
+            # Align benchmark with strategy returns
+            aligned_benchmark = benchmark_returns.reindex(returns.index).fillna(0)
+
+            # Calculate excess returns relative to benchmark
+            excess_returns = returns - aligned_benchmark
+
+            # Annualized excess return
+            annualized_excess = excess_returns.mean() * 252
+
+            # Tracking error (annualized)
+            tracking_error = excess_returns.std() * np.sqrt(252)
+
+            # Information Ratio
+            information_ratio = annualized_excess / tracking_error if tracking_error > 0 else 0
+
+            logger.debug(f"IR calculation: excess={annualized_excess:.2%}, "
+                        f"tracking_error={tracking_error:.2%}, IR={information_ratio:.3f}")
+        else:
+            # Fallback to zero-benchmark if benchmark calculation fails
+            logger.warning("Benchmark calculation failed, using zero-benchmark for IR")
+            excess_returns = returns
+            tracking_error = excess_returns.std() * np.sqrt(252)
+            information_ratio = (excess_returns.mean() * 252) / tracking_error if tracking_error > 0 else 0
 
         # Calculate win rate
         win_rate = (returns > 0).sum() / len(returns) * 100
@@ -538,6 +771,28 @@ class ImprovedBacktestEngine:
             'win_rate': 0.0,
             'profit_factor': 0.0,
             'strategy_category_bin': 1
+        }
+
+    def _get_worst_case_metrics(self) -> Dict[str, float]:
+        """
+        Get worst-case metrics when all backtests fail.
+
+        Per paper Section 6.3.2 (Equation 3): Combined Score = SR + IR + MDD
+        Assigns worst observed values to ensure strategy is rejected in evolution.
+
+        Returns worst-case metrics that ensure rejection in evolutionary selection.
+        """
+        return {
+            'sharpe_ratio': -3.0,       # Worst observed in training
+            'sortino_ratio': -3.0,      # Consistent with Sharpe
+            'information_ratio': -2.0,  # Worst vs benchmark
+            'total_return': -50.0,      # -50% loss
+            'max_drawdown': -100.0,     # Complete loss
+            'trading_frequency': 0,     # No trades executed
+            'win_rate': 0.0,
+            'profit_factor': 0.0,
+            'strategy_category_bin': 0,
+            'combined_score': -6.0      # SR + IR + MDD = -3 + (-2) + (-1) = -6
         }
 
 

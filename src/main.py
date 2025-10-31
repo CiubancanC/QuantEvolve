@@ -232,11 +232,19 @@ class QuantEvolve:
                         f"Return={metrics.get('total_return', 0):.2f}%, "
                         f"MDD={metrics.get('max_drawdown', 0):.2f}%")
 
+        # Calculate backtest period in years
+        backtest_years = 3.0  # Default assumption
+        if hasattr(self.backtest_engine, 'train_start') and hasattr(self.backtest_engine, 'train_end'):
+            if self.backtest_engine.train_start and self.backtest_engine.train_end:
+                days = (self.backtest_engine.train_end - self.backtest_engine.train_start).days
+                backtest_years = days / 365.25
+
         # Evaluate strategy
         analysis_dict = self.evaluation_team.analyze_strategy(
             hypothesis=hypothesis,
             code=code,
-            metrics=metrics
+            metrics=metrics,
+            backtest_years=backtest_years
         )
 
         # Update metrics with category from evaluation

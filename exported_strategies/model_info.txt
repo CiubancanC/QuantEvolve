@@ -1,0 +1,32 @@
+================================================================================
+QUANTEVOLVE MODEL INFORMATION
+================================================================================
+Exported: 2025-11-01 01:09:14
+
+Total Generations Evolved: 149
+Number of Islands: 9
+Total Strategies in Feature Map: 363
+Insights Collected: 571
+
+Island Categories:
+  Island 0: Momentum/Trend
+  Island 1: Mean-Reversion
+  Island 2: Volatility
+  Island 3: Volume/Liquidity
+  Island 4: Breakout/Pattern
+  Island 5: Correlation/Pairs
+  Island 6: Risk/Allocation
+  Island 7: Seasonal/Calendar Effects
+  Island 8: benchmark
+
+Best Strategy:
+  ID: strat_734877525
+  Generation: 145
+  Score: 0.071
+
+================================================================================
+To use this model:
+1. Load the strategy from the exported .py file
+2. Call generate_signals(data) with OHLCV DataFrame
+3. Use returned signals (-1, 0, 1) for trading
+================================================================================
