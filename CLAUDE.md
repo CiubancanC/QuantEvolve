@@ -298,6 +298,15 @@ volume_slippage: bool = True          # Quadratic model
 3. Optionally add to `combined_score` formula (line ~460)
 4. Update feature map dimensions in config if dimensionality needed
 
+### Recent Cleanup (Nov 2025)
+
+The following deprecated files were removed:
+- `src/backtesting/simple_backtest.py` - Replaced by ImprovedBacktestEngine
+- `src/optimization/parameter_optimizer.py` - Never integrated into main loop
+- `tests/test_zipline_basic.py` - Zipline not used (custom engine instead)
+
+All core functionality remains intact.
+
 ### Debugging Strategy Failures
 
 Strategies fail during implementation when:

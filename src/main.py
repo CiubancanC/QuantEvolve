@@ -17,7 +17,6 @@ from .agents.data_agent import DataAgent
 from .agents.research_agent import ResearchAgent
 from .agents.coding_team import CodingTeam
 from .agents.evaluation_team import EvaluationTeam
-from .backtesting.simple_backtest import SimpleBacktestEngine
 from .backtesting.improved_backtest import ImprovedBacktestEngine
 from .utils.data_prep import verify_data, create_sample_data
 

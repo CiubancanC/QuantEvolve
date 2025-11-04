@@ -62,3 +62,12 @@ Thumbs.db
 # Pickled results (regenerated)
 results/**/*.pkl
 !results/.gitkeep
+
+# Training logs and reports (generated files)
+*.log
+training_run*.log
+simulation_report.txt
+*_SUMMARY*.md
+
+# Model outputs (can be regenerated)
+MODEL_SUMMARY.md
