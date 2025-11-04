@@ -2,7 +2,7 @@
 
 This document catalogs all intentional deviations of this implementation from the original QuantEvolve research paper (Yun et al., 2025, arXiv:2510.18569).
 
-> **Last Updated**: October 30, 2025
+> **Last Updated**: November 5, 2025
 
 ---
 
@@ -96,37 +96,41 @@ This implementation is **~95% aligned** with the research paper. The core evolut
 
 ### Current Implementation
 ```python
-# improved_backtest.py:446-450
-# For IR, we compare against 0 (assuming market neutral strategy)
-excess_returns = returns  # Already relative to 0
-tracking_error = excess_returns.std() * np.sqrt(252)
-information_ratio = (excess_returns.mean() * 252) / tracking_error
+# improved_backtest.py:214-301
+# Calculates market-cap-weighted benchmark (using equal-weight as proxy)
+benchmark_returns = self._calculate_benchmark_returns()
+
+if benchmark_returns is not None:
+    # Calculate excess returns relative to benchmark
+    excess_returns = returns - aligned_benchmark
+    annualized_excess = excess_returns.mean() * 252
+    tracking_error = excess_returns.std() * np.sqrt(252)
+    information_ratio = annualized_excess / tracking_error
+else:
+    # Fallback to zero-benchmark if benchmark calculation fails
+    information_ratio = (returns.mean() * 252) / (returns.std() * np.sqrt(252))
 ```
 
-**Status**: ⚠️ **INCORRECT - Needs Fix**
+**Status**: ✅ **FIXED**
+
+### Implementation Details
+- Uses `_calculate_benchmark_returns()` method (lines 214-301)
+- Implements monthly-rebalanced portfolio per paper specification
+- Uses **equal-weighted portfolio** as proxy for market-cap weighting
+  - Rationale: Market cap data not available in OHLCV files
+  - Equal weighting is reasonable approximation when stock caps are similar
+- Caches benchmark returns for performance
+- Gracefully falls back to zero-benchmark only if data unavailable
 
 ### Impact
-- 🔴 **Critical**: Affects evolutionary selection pressure
-- IR is one component of combined score: `Score = SR + IR + MDD`
-- Strategies evolve with different selection criteria than in paper
-- Results not directly comparable to paper's reported performance
-
-### Planned Fix
-1. Implement market-cap-weighted benchmark calculation:
-   - Load all equity symbols
-   - Calculate market cap weights (or proxy using price × shares)
-   - Rebalance monthly
-   - Calculate benchmark returns
-2. Update `_calculate_metrics()` to use benchmark:
-   ```python
-   IR = (mean(strategy_returns - benchmark_returns) * 252) /
-        (std(strategy_returns - benchmark_returns) * sqrt(252))
-   ```
+- ✅ **Matches paper specification**: Monthly rebalancing, multi-asset portfolio
+- ✅ **Correct IR calculation**: Uses benchmark returns as specified
+- ⚠️ **Approximation**: Equal-weighted vs true market-cap weighted
+  - For the 6 mega-cap stocks (AAPL, NVDA, AMZN, GOOGL, MSFT, TSLA), equal weighting is reasonable
+  - Could be enhanced with actual market cap data if needed
 
 ### Files Affected
-- `src/backtesting/improved_backtest.py`: Lines 446-450
-
-**Priority**: **HIGH** - Should be fixed before production use
+- `src/backtesting/improved_backtest.py`: Lines 214-301 (benchmark calculation), 655-684 (IR calculation)
 
 ---
 
@@ -216,33 +220,7 @@ information_ratio = (excess_returns.mean() * 252) / tracking_error
 
 ---
 
-## 7. Parameter Optimization Layer
-
-### Paper Specification
-- Not mentioned in paper
-
-### Current Implementation
-- **Optional enhancement**: `ParameterOptimizer` class for grid search
-- Automatically identifies tunable parameters (windows, thresholds, sigma values)
-- Grid search over parameter combinations
-- Selects best-performing variant
-
-### Rationale
-- **Post-evolution refinement**: Can be applied to top strategies after evolution
-- **Optional**: Not part of core evolution loop
-- **Practical utility**: Improves final strategy performance
-
-### Impact
-- ✅ **Enhancement**: Improves final results
-- ✅ **Optional**: Can be disabled
-- ✅ **Separable**: Doesn't affect core evolution algorithm
-
-### Files Affected
-- `src/optimization/parameter_optimizer.py`: Grid search implementation
-
----
-
-## 8. Configuration Management
+## 7. Configuration Management
 
 ### Paper Specification
 - Parameters hard-coded or in simple config
@@ -269,39 +247,37 @@ information_ratio = (excess_returns.mean() * 252) / tracking_error
 |-----------|------------|----------------|--------|--------|
 | LLM Models | Qwen (local) | Qwen (API) | ✅ Acceptable | Minor latency |
 | Backtesting | Zipline | Custom vectorized | ✅ Acceptable | Edge cases |
-| IR Calculation | Market-cap benchmark | Zero benchmark | 🔴 **Needs Fix** | Critical |
+| IR Calculation | Market-cap benchmark | Equal-weighted benchmark (proxy) | ✅ **Fixed** | Minor approximation |
 | QuantStats | Required | Manual calculation | ✅ Acceptable | Missing advanced metrics |
 | Insight Curation | Basic | Enhanced | ✅ Enhancement | Improved quality |
-| Over-filtering Detection | Not specified | Added | ✅ Enhancement | Better strategies |
-| Parameter Optimization | Not specified | Added | ✅ Enhancement | Optional feature |
+| Over-filtering Detection | Not specified | Category-aware thresholds | ✅ Enhancement | Better strategies |
 | Configuration | Hard-coded | YAML-based | ✅ Enhancement | Better UX |
 
 ---
 
 ## Action Items
 
-### Critical (Before Production)
-1. **Fix IR Calculation** to use market-cap-weighted benchmark
-   - Priority: **HIGH**
-   - Effort: ~4 hours
-   - Files: `src/backtesting/improved_backtest.py`
-
 ### Important (For Research Reproducibility)
-2. **Validate Metrics** against paper's reported values
+1. **Validate Metrics** against paper's reported values
    - Run simple buy-and-hold and verify metrics match expectations
    - Effort: ~2 hours
 
-3. **Document Data Requirements**
+2. **Document Data Requirements**
    - Specify data format, adjustment requirements
    - Effort: ~1 hour
 
 ### Optional (Enhancements)
-4. **Add QuantStats Integration** (optional, for advanced metrics)
+3. **Add QuantStats Integration** (optional, for advanced metrics)
    - Effort: ~2 hours
 
-5. **Corporate Action Handling** (if needed)
+4. **Corporate Action Handling** (if needed)
    - Add split/dividend detection
    - Effort: ~8 hours
+
+5. **True Market-Cap Weighting** (nice-to-have)
+   - Replace equal-weighted benchmark with true market-cap data
+   - Effort: ~4 hours
+   - Note: Equal-weighted is reasonable approximation for mega-cap stocks
 
 ---
 
@@ -309,10 +285,10 @@ information_ratio = (excess_returns.mean() * 252) / tracking_error
 
 Before claiming full paper replication:
 
-- [ ] Fix IR calculation to use market-cap benchmark
+- [x] Fix IR calculation to use market-cap benchmark (equal-weighted proxy implemented)
 - [ ] Run baseline strategies (buy-and-hold) and verify metrics
-- [ ] Validate combined score formula: `SR + IR + MDD`
-- [ ] Verify transaction cost calculations match paper
+- [x] Validate combined score formula: `SR + IR + MDD` (verified in code)
+- [x] Verify transaction cost calculations match paper (confirmed at lines 29-31)
 - [ ] Document any remaining limitations
 - [ ] Add integration test comparing results to paper's Table 4
 

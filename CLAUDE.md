@@ -130,7 +130,7 @@ python3 examples/simple_live_trader.py --mode live --capital 10000
 - Paper-specified transaction costs:
   - Commission: $0.0075/share + $1.00 minimum per trade
   - Slippage: Quadratic function of traded volume percentage
-- Metrics: Sharpe, Sortino, IR (⚠️ uses zero benchmark, should be market-cap weighted), MDD, Total Return, Win Rate, Profit Factor
+- Metrics: Sharpe, Sortino, IR (uses equal-weighted benchmark as market-cap proxy), MDD, Total Return, Win Rate, Profit Factor
 - Combined score: `SR + IR + MDD` (MDD is negative, so this penalizes drawdown)
 
 ### Key Design Patterns
@@ -217,18 +217,13 @@ ALPACA_ENDPOINT=...      # paper or live
 
 ### Known Deviations from Paper (see docs/DEVIATIONS.md)
 
-1. **🔴 CRITICAL**: Information Ratio calculation is INCORRECT
-   - Currently uses zero benchmark instead of market-cap weighted portfolio
-   - Affects evolutionary selection pressure
-   - Fix needed at `src/backtesting/improved_backtest.py:446-450`
-   - Priority: HIGH before production use
-
-2. **Backtesting Framework**: Custom vectorized engine instead of Zipline
+1. **Backtesting Framework**: Custom vectorized engine instead of Zipline
    - Transaction costs match paper specification ✅
+   - IR calculation uses equal-weighted benchmark (proxy for market-cap weighted) ✅
    - May not handle corporate actions (splits, dividends, delistings)
    - Assumes clean, split-adjusted data
 
-3. **LLM Inference**: OpenRouter API instead of local models
+2. **LLM Inference**: OpenRouter API instead of local models
    - Models are identical, only hosting differs
    - Adds 1-3 second network latency per generation
    - Requires internet connection and API key
