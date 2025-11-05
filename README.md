@@ -327,10 +327,112 @@ QuantEvolve/
 
 ## 📖 Documentation
 
+### Core Documentation
 - **[Research Paper](docs/QuantEvolve.md)**: Full paper describing the methodology
 - **[Deviations from Paper](docs/DEVIATIONS.md)**: Implementation differences and rationale
 - **[Improvements Log](docs/IMPROVEMENTS.md)**: Enhancement history and lessons learned
 - **[Contributing Guide](CONTRIBUTING.md)**: How to contribute to the project
+- **[Developer Guide](CLAUDE.md)**: Guide for working with this codebase
+
+### Paper Trading Guides
+- **[Quick Start](docs/paper_trading/START_HERE.md)**: Get started with automated paper trading
+- **[Complete Guide](docs/paper_trading/AUTOMATED_TRADING_GUIDE.md)**: Full documentation and troubleshooting
+- **[Summary](docs/paper_trading/PAPER_TRADING_SUMMARY.md)**: Quick reference
+
+### Blog Post
+- **[Blog Post Draft](docs/blog_post.md)**: Write-up of results and methodology
+
+---
+
+## 🤖 Automated Paper Trading
+
+QuantEvolve includes a **fully automated paper trading system** for testing evolved strategies in real market conditions.
+
+### Quick Start
+
+```bash
+# Start 30-day automated paper trading with your top 3 strategies
+./scripts/trading start
+
+# Check status
+./scripts/trading status
+
+# View performance report
+./scripts/trading report
+
+# Stop daemon
+./scripts/trading stop
+```
+
+### Features
+
+- **Fully Automated**: Long-running daemon trades for 30 days with zero manual intervention
+- **Market-Aware**: Automatically detects market hours (Mon-Fri 9:30 AM - 4 PM ET)
+- **Daily Execution**: Trades at 3:30 PM ET (30 min before close)
+- **Error Recovery**: Automatic retry and graceful error handling
+- **Performance Tracking**: Daily reports and comprehensive metrics
+- **3 Strategies in Parallel**: Top performers from evolution run simultaneously
+
+### Setup Paper Trading
+
+1. **Configure Alpaca API** (paper trading - no real money):
+   ```bash
+   # Add to .env file
+   ALPACA_API_KEY=your_key_here
+   ALPACA_SECRET_KEY=your_secret_here
+   ALPACA_ENDPOINT=https://paper-api.alpaca.markets
+   ```
+
+2. **Start the daemon**:
+   ```bash
+   ./scripts/trading start
+   ```
+
+3. **Monitor progress** (optional, weekly):
+   ```bash
+   ./scripts/trading report
+   ```
+
+The daemon will:
+- Run for 30 days automatically
+- Execute trades daily at 3:30 PM ET
+- Generate daily performance reports
+- Track all positions and metrics
+- Shut down gracefully after 30 days
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `./scripts/trading start` | Start 30-day automated trading |
+| `./scripts/trading stop` | Stop the daemon |
+| `./scripts/trading status` | Check daemon status and performance |
+| `./scripts/trading logs` | View recent activity logs |
+| `./scripts/trading report` | Generate detailed performance report |
+
+### What Gets Tracked
+
+- **Total return** vs backtest expectations
+- **Sharpe ratio** and other risk metrics
+- **Trade frequency** and signal quality
+- **Position history** for all 3 strategies
+- **Daily performance** snapshots
+- **Error logs** for debugging
+
+All data saved in `results/paper_trading/`:
+- `tracking.json` - Complete trading history
+- `daemon_state.json` - Daemon status
+- `daily_reports/` - Daily markdown reports
+
+### After 30 Days
+
+You'll have:
+- 20-22 trading days of real market data
+- Performance comparison vs backtests
+- Insights into strategy adaptation
+- Material for analysis and refinement
+
+**Note**: This is **paper trading only** - no real money at risk. Perfect for validating strategies before live deployment.
 
 ---
 

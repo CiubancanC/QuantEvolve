@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# Simple wrapper for paper trading daemon control
+#
+# Usage:
+#   ./scripts/trading start   # Start 30-day automated trading
+#   ./scripts/trading stop    # Stop the daemon
+#   ./scripts/trading status  # Check if running
+#   ./scripts/trading logs    # Show recent logs
+#   ./scripts/trading report  # Generate performance report
+#
+
+cd "$(dirname "$0")/.." || exit 1
+
+case "$1" in
+    start)
+        echo "Starting 30-day paper trading daemon..."
+        python3 scripts/paper_trading_daemon.py start
+        ;;
+
+    stop)
+        echo "Stopping paper trading daemon..."
+        python3 scripts/paper_trading_daemon.py stop
+        ;;
+
+    status)
+        python3 scripts/paper_trading_daemon.py status
+        ;;
+
+    logs)
+        echo "Recent daemon logs:"
+        echo "===================="
+        tail -50 logs/daemon/paper_trading_daemon.log
+        ;;
+
+    report)
+        python3 scripts/generate_paper_trading_report.py
+        ;;
+
+    *)
+        echo "Usage: $0 {start|stop|status|logs|report}"
+        echo ""
+        echo "Commands:"
+        echo "  start   - Start 30-day automated paper trading"
+        echo "  stop    - Stop the daemon"
+        echo "  status  - Check daemon status"
+        echo "  logs    - Show recent daemon logs"
+        echo "  report  - Generate performance report"
+        exit 1
+        ;;
+esac
